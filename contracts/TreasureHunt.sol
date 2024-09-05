@@ -4,10 +4,10 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract TreasureHunt is ReentrancyGuard {
-    uint8 public constant GRID_SIZE = 10;
-    uint8 public constant TOTAL_POSITIONS = 100;
-    uint8 public constant WINNER_PERCENTAGE = 90;
-    uint64 public constant MIN_BET = 0.01 ether;
+    uint8 private constant GRID_SIZE = 10;
+    uint8 private constant TOTAL_POSITIONS = 100;
+    uint8 private constant WINNER_PERCENTAGE = 90;
+    uint64 private constant MIN_BET = 0.01 ether;
     uint8 public treasurePosition;
 
     struct Player {
@@ -18,8 +18,8 @@ contract TreasureHunt is ReentrancyGuard {
     mapping(address => Player) public players;
     address[] public playerAddresses;
 
-    event PlayerJoined(address player, uint8 position);
-    event PlayerMoved(address player, uint8 newPosition);
+    event PlayerJoined(address player);
+    event PlayerMoved(address player);
     event TreasureMoved(uint8 newPosition);
     event GameWon(address winner, uint256 prize);
 
@@ -28,35 +28,33 @@ contract TreasureHunt is ReentrancyGuard {
     error PlayerNotJoined();
     error InvalidMove();
 
-    constructor() {
-        treasurePosition = uint8(
-            uint256(
-                keccak256(abi.encodePacked(block.number, block.timestamp))
-            ) % TOTAL_POSITIONS
-        );
+    constructor() payable {
+        treasurePosition = getRandomPosition();
+    }
+
+    modifier onlyJoinedPlayer() {
+        if (!players[msg.sender].hasJoined) revert PlayerNotJoined();
+        _;
     }
 
     function joinGame() external payable {
         if (msg.value < MIN_BET) revert InsufficientBet();
         if (players[msg.sender].hasJoined) revert PlayerAlreadyJoined();
 
-        uint8 initialPosition = uint8(
-            uint256(keccak256(abi.encodePacked(msg.sender, block.timestamp))) %
-                TOTAL_POSITIONS
-        );
-        players[msg.sender] = Player(initialPosition, true);
+        uint8 initialPosition = getRandomPosition();
+        players[msg.sender].position = initialPosition;
+        players[msg.sender].hasJoined = true;
         playerAddresses.push(msg.sender);
 
-        emit PlayerJoined(msg.sender, initialPosition);
+        emit PlayerJoined(msg.sender);
     }
 
-    function move(uint8 newPosition) external nonReentrant {
-        if (!players[msg.sender].hasJoined) revert PlayerNotJoined();
+    function move(uint8 newPosition) external nonReentrant onlyJoinedPlayer {
         if (!isValidMove(players[msg.sender].position, newPosition))
             revert InvalidMove();
 
         players[msg.sender].position = newPosition;
-        emit PlayerMoved(msg.sender, newPosition);
+        emit PlayerMoved(msg.sender);
 
         moveTreasure(newPosition);
 
@@ -80,8 +78,12 @@ contract TreasureHunt is ReentrancyGuard {
         emit GameWon(winner, prize);
 
         // Reset game state
-        for (uint i = 0; i < playerAddresses.length; i++) {
+        uint256 length = playerAddresses.length;
+        for (uint256 i = 0; i < length; ) {
             delete players[playerAddresses[i]];
+            unchecked {
+                ++i;
+            }
         }
         treasurePosition = getRandomPosition();
     }
@@ -98,18 +100,15 @@ contract TreasureHunt is ReentrancyGuard {
     function getRandomAdjacentPosition(
         uint8 position
     ) private view returns (uint8) {
-        uint8[4] memory possibleMoves = [
-            (position + 1) % TOTAL_POSITIONS,
-            (position + TOTAL_POSITIONS - 1) % TOTAL_POSITIONS,
-            (position + GRID_SIZE) % TOTAL_POSITIONS,
-            (position + TOTAL_POSITIONS - GRID_SIZE) % TOTAL_POSITIONS
-        ];
-        return
-            possibleMoves[
-                uint256(
-                    keccak256(abi.encodePacked(block.number, block.timestamp))
-                ) % 4
-            ];
+        uint256 randomValue = getRandomPosition();
+        uint256 direction = (randomValue & 3); // Equivalent to % 4, but more gas-efficient
+        unchecked {
+            if (direction == 0) return (position + 1) % TOTAL_POSITIONS;
+            if (direction == 1)
+                return (position + TOTAL_POSITIONS - 1) % TOTAL_POSITIONS;
+            if (direction == 2) return (position + GRID_SIZE) % TOTAL_POSITIONS;
+            return (position + TOTAL_POSITIONS - GRID_SIZE) % TOTAL_POSITIONS;
+        }
     }
 
     function getRandomPosition() private view returns (uint8) {
@@ -123,18 +122,18 @@ contract TreasureHunt is ReentrancyGuard {
 
     function isPrime(uint256 n) private pure returns (bool) {
         if (n <= 1) return false;
-        for (uint256 i = 2; i * i <= n; i++) {
+        for (uint256 i = 2; i * i <= n; ) {
             if (n % i == 0) return false;
+            unchecked {
+                ++i;
+            }
         }
         return true;
     }
 
-    function getPlayerPosition(address player) external view returns (uint8) {
-        if (!players[player].hasJoined) revert PlayerNotJoined();
+    function getPlayerPosition(
+        address player
+    ) external view onlyJoinedPlayer returns (uint8) {
         return players[player].position;
-    }
-
-    function getTreasurePosition() external view returns (uint8) {
-        return treasurePosition;
     }
 }
