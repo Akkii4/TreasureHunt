@@ -53,10 +53,15 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     /// @dev Reverts if the bet is insufficient, player has already joined, or max players reached
     function joinGame() external payable {
         if (msg.value < MIN_BET) revert InsufficientBet();
-        if (players[msg.sender].hasJoined) revert PlayerAlreadyJoined();
+
+        Player storage player = players[msg.sender];
+
+        if (player.hasJoined) revert PlayerAlreadyJoined();
         if (playerAddresses.length == MAX_PLAYERS) revert MaxPlayersReached();
 
-        players[msg.sender] = Player(getRandomPosition(), true);
+        player.position = getRandomPosition();
+        player.hasJoined = true;
+
         playerAddresses.push(msg.sender);
 
         emit PlayerJoined(msg.sender);
@@ -65,7 +70,9 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     /// @notice Allows a player to move to a new position
     /// @param newPosition The position the player wants to move to
     /// @dev Checks for valid move, updates treasure position, and ends game if treasure is found
-    function move(uint256 newPosition) external nonReentrant onlyJoinedPlayer {
+    function move(
+        uint256 newPosition
+    ) external payable nonReentrant onlyJoinedPlayer {
         if (!isValidMove(players[msg.sender].position, newPosition))
             revert InvalidMove();
 
@@ -107,6 +114,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
                 ++i;
             }
         }
+        playerAddresses = new address[](0);
         treasurePosition = getRandomPosition();
     }
 
@@ -171,7 +179,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
 
     /// @notice Allows the owner to withdraw all funds in case of emergency
     /// @dev Can only be called by the contract owner
-    function emergencyWithdraw() external onlyOwner {
+    function emergencyWithdraw() external payable onlyOwner {
         uint256 balance = address(this).balance;
         payable(owner()).transfer(balance);
         emit EmergencyWithdrawal(owner(), balance);
