@@ -8,6 +8,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     uint8 private constant GRID_SIZE = 10;
     uint8 private constant TOTAL_POSITIONS = 100;
     uint8 private constant WINNER_PERCENTAGE = 90;
+    uint8 private constant MAX_PLAYERS = 100;
     uint64 private constant MIN_BET = 0.01 ether;
     uint8 public treasurePosition;
 
@@ -29,6 +30,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     error PlayerAlreadyJoined();
     error PlayerNotJoined();
     error InvalidMove();
+    error MaxPlayersReached();
 
     constructor() payable Ownable(msg.sender) {
         treasurePosition = getRandomPosition();
@@ -42,6 +44,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     function joinGame() external payable {
         if (msg.value < MIN_BET) revert InsufficientBet();
         if (players[msg.sender].hasJoined) revert PlayerAlreadyJoined();
+        if (playerAddresses.length == MAX_PLAYERS) revert MaxPlayersReached();
 
         uint8 initialPosition = getRandomPosition();
         players[msg.sender].position = initialPosition;
