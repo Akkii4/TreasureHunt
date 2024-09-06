@@ -23,6 +23,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     event PlayerMoved(address player);
     event TreasureMoved(uint8 newPosition);
     event GameWon(address winner, uint256 prize);
+    event EmergencyWithdrawal(address to, uint256 amount);
 
     error InsufficientBet();
     error PlayerAlreadyJoined();
@@ -132,9 +133,9 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         return true;
     }
 
-    function getPlayerPosition(
-        address player
-    ) external view onlyJoinedPlayer returns (uint8) {
-        return players[player].position;
+    function emergencyWithdraw() external onlyOwner {
+        uint256 balance = address(this).balance;
+        payable(owner()).transfer(balance);
+        emit EmergencyWithdrawal(owner(), balance);
     }
 }
