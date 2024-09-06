@@ -4,6 +4,9 @@ pragma solidity 0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+/// @title TreasureHunt
+/// @notice A smart contract for an on-chain treasure hunt game
+/// @dev Inherits from Ownable and ReentrancyGuard for security
 contract TreasureHunt is Ownable, ReentrancyGuard {
     uint8 public treasurePosition;
     uint8 private nonce;
@@ -13,6 +16,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     uint8 private constant MAX_PLAYERS = 100;
     uint64 private constant MIN_BET = 0.01 ether;
 
+    /// @notice Struct to store player information
     struct Player {
         uint256 position;
         bool hasJoined;
@@ -33,15 +37,20 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     error InvalidMove();
     error MaxPlayersReached();
 
+    /// @notice Initializes the contract and sets the initial treasure position
+    /// @dev The contract is initialized with the deployer as the owner
     constructor() payable Ownable(msg.sender) {
         treasurePosition = getRandomPosition();
     }
 
+    /// @notice Modifier to check if the caller has joined the game
     modifier onlyJoinedPlayer() {
         if (!players[msg.sender].hasJoined) revert PlayerNotJoined();
         _;
     }
 
+    /// @notice Allows a player to join the game by placing a bet
+    /// @dev Reverts if the bet is insufficient, player has already joined, or max players reached
     function joinGame() external payable {
         if (msg.value < MIN_BET) revert InsufficientBet();
         if (players[msg.sender].hasJoined) revert PlayerAlreadyJoined();
@@ -53,6 +62,9 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         emit PlayerJoined(msg.sender);
     }
 
+    /// @notice Allows a player to move to a new position
+    /// @param newPosition The position the player wants to move to
+    /// @dev Checks for valid move, updates treasure position, and ends game if treasure is found
     function move(uint256 newPosition) external nonReentrant onlyJoinedPlayer {
         if (!isValidMove(players[msg.sender].position, newPosition))
             revert InvalidMove();
@@ -67,6 +79,9 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         }
     }
 
+    /// @notice Moves the treasure based on the player's new position
+    /// @param playerPosition The player's new position
+    /// @dev Moves treasure to adjacent position if player lands on multiple of 5, or random position if prime
     function moveTreasure(uint256 playerPosition) private {
         if (playerPosition % 5 == 0) {
             treasurePosition = getRandomAdjacentPosition(treasurePosition);
@@ -76,6 +91,9 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         emit TreasureMoved(treasurePosition);
     }
 
+    /// @notice Ends the game when a player finds the treasure
+    /// @param winner The address of the winning player
+    /// @dev Transfers prize to winner and resets game state
     function endGame(address winner) private {
         uint256 prize = (address(this).balance * (WINNER_PERCENTAGE)) / 100;
         payable(winner).transfer(prize);
@@ -92,6 +110,10 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         treasurePosition = getRandomPosition();
     }
 
+    /// @notice Checks if a move is valid
+    /// @param from The starting position
+    /// @param to The ending position
+    /// @return bool indicating if the move is valid
     function isValidMove(uint256 from, uint256 to) private pure returns (bool) {
         int256 diff = int256(to) - int256(from);
         return
@@ -101,6 +123,9 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
                 diff == -int8(GRID_SIZE)) && to < TOTAL_POSITIONS;
     }
 
+    /// @notice Gets a random adjacent position
+    /// @param position The current position
+    /// @return uint8 A random adjacent position
     function getRandomAdjacentPosition(uint8 position) private returns (uint8) {
         uint256 randomValue = getRandomPosition();
         uint256 direction = (randomValue & 3); // Equivalent to % 4, but more gas-efficient
@@ -113,6 +138,8 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         }
     }
 
+    /// @notice Generates a random position
+    /// @return uint8 A random position on the grid
     function getRandomPosition() private returns (uint8) {
         return
             uint8(
@@ -129,6 +156,9 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
             );
     }
 
+    /// @notice Checks if a number is prime
+    /// @param n The number to check
+    /// @return bool indicating if the number is prime
     function isPrime(uint256 n) private pure returns (bool) {
         if (n <= 1) return false;
         if (n <= 3) return true;
@@ -139,6 +169,8 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         return true;
     }
 
+    /// @notice Allows the owner to withdraw all funds in case of emergency
+    /// @dev Can only be called by the contract owner
     function emergencyWithdraw() external onlyOwner {
         uint256 balance = address(this).balance;
         payable(owner()).transfer(balance);
