@@ -116,11 +116,18 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         }
     }
 
-    function getRandomPosition() private view returns (uint8) {
+    function getRandomPosition() private returns (uint8) {
         return
             uint8(
                 uint256(
-                    keccak256(abi.encodePacked(block.number, block.timestamp))
+                    keccak256(
+                        abi.encodePacked(
+                            block.number,
+                            block.timestamp,
+                            msg.sender,
+                            nonce++
+                        )
+                    )
                 ) % TOTAL_POSITIONS
             );
     }
