@@ -4,7 +4,7 @@ pragma solidity 0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract TreasureHunt is ReentrancyGuard {
+contract TreasureHunt is Ownable, ReentrancyGuard {
     uint8 private constant GRID_SIZE = 10;
     uint8 private constant TOTAL_POSITIONS = 100;
     uint8 private constant WINNER_PERCENTAGE = 90;
@@ -29,7 +29,7 @@ contract TreasureHunt is ReentrancyGuard {
     error PlayerNotJoined();
     error InvalidMove();
 
-    constructor() payable {
+    constructor() payable Ownable(msg.sender) {
         treasurePosition = getRandomPosition();
     }
 
