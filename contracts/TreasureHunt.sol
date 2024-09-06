@@ -5,15 +5,16 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract TreasureHunt is Ownable, ReentrancyGuard {
+    uint8 public treasurePosition;
+    uint8 private nonce;
     uint8 private constant GRID_SIZE = 10;
     uint8 private constant TOTAL_POSITIONS = 100;
     uint8 private constant WINNER_PERCENTAGE = 90;
     uint8 private constant MAX_PLAYERS = 100;
     uint64 private constant MIN_BET = 0.01 ether;
-    uint8 public treasurePosition;
 
     struct Player {
-        uint8 position;
+        uint256 position;
         bool hasJoined;
     }
 
@@ -46,15 +47,13 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         if (players[msg.sender].hasJoined) revert PlayerAlreadyJoined();
         if (playerAddresses.length == MAX_PLAYERS) revert MaxPlayersReached();
 
-        uint8 initialPosition = getRandomPosition();
-        players[msg.sender].position = initialPosition;
-        players[msg.sender].hasJoined = true;
+        players[msg.sender] = Player(getRandomPosition(), true);
         playerAddresses.push(msg.sender);
 
         emit PlayerJoined(msg.sender);
     }
 
-    function move(uint8 newPosition) external nonReentrant onlyJoinedPlayer {
+    function move(uint256 newPosition) external nonReentrant onlyJoinedPlayer {
         if (!isValidMove(players[msg.sender].position, newPosition))
             revert InvalidMove();
 
@@ -68,7 +67,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         }
     }
 
-    function moveTreasure(uint8 playerPosition) private {
+    function moveTreasure(uint256 playerPosition) private {
         if (playerPosition % 5 == 0) {
             treasurePosition = getRandomAdjacentPosition(treasurePosition);
         } else if (isPrime(playerPosition)) {
@@ -93,8 +92,8 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         treasurePosition = getRandomPosition();
     }
 
-    function isValidMove(uint8 from, uint8 to) private pure returns (bool) {
-        int8 diff = int8(to) - int8(from);
+    function isValidMove(uint256 from, uint256 to) private pure returns (bool) {
+        int256 diff = int256(to) - int256(from);
         return
             (diff == 1 ||
                 diff == -1 ||
@@ -102,9 +101,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
                 diff == -int8(GRID_SIZE)) && to < TOTAL_POSITIONS;
     }
 
-    function getRandomAdjacentPosition(
-        uint8 position
-    ) private view returns (uint8) {
+    function getRandomAdjacentPosition(uint8 position) private returns (uint8) {
         uint256 randomValue = getRandomPosition();
         uint256 direction = (randomValue & 3); // Equivalent to % 4, but more gas-efficient
         unchecked {
@@ -134,11 +131,10 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
 
     function isPrime(uint256 n) private pure returns (bool) {
         if (n <= 1) return false;
-        for (uint256 i = 2; i * i <= n; ) {
-            if (n % i == 0) return false;
-            unchecked {
-                ++i;
-            }
+        if (n <= 3) return true;
+        if (n % 2 == 0 || n % 3 == 0) return false;
+        for (uint256 i = 5; i * i <= n; i += 6) {
+            if (n % i == 0 || n % (i + 2) == 0) return false;
         }
         return true;
     }
