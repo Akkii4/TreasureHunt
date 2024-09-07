@@ -79,10 +79,10 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         players[msg.sender].position = newPosition;
         emit PlayerMoved(msg.sender);
 
-        moveTreasure(newPosition);
-
         if (newPosition == treasurePosition) {
             endGame(msg.sender);
+        } else {
+            moveTreasure(newPosition);
         }
     }
 
@@ -90,12 +90,16 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     /// @param playerPosition The player's new position
     /// @dev Moves treasure to adjacent position if player lands on multiple of 5, or random position if prime
     function moveTreasure(uint256 playerPosition) private {
+        uint8 newPosition = treasurePosition;
         if (playerPosition % 5 == 0) {
-            treasurePosition = getRandomAdjacentPosition(treasurePosition);
+            newPosition = getRandomAdjacentPosition(treasurePosition);
         } else if (isPrime(playerPosition)) {
-            treasurePosition = getRandomPosition();
+            newPosition = getRandomPosition();
         }
-        emit TreasureMoved(treasurePosition);
+        if (newPosition != treasurePosition) {
+            treasurePosition = newPosition;
+            emit TreasureMoved(treasurePosition);
+        }
     }
 
     /// @notice Ends the game when a player finds the treasure
@@ -106,6 +110,11 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
         payable(winner).transfer(prize);
         emit GameWon(winner, prize);
 
+        resetGame();
+        treasurePosition = getRandomPosition();
+    }
+
+    function resetGame() private {
         // Reset game state
         uint256 length = playerAddresses.length;
         for (uint256 i = 0; i < length; ) {
@@ -115,20 +124,45 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
             }
         }
         playerAddresses = new address[](0);
-        treasurePosition = getRandomPosition();
+    }
+
+    /// @notice Returns all valid adjacent positions for a given position
+    /// @param currentPosition The current position of the player
+    /// @return adjacentPositions An array of valid adjacent positions
+    function getValidAdjacentPositions(
+        uint256 currentPosition
+    ) public pure returns (uint256[] memory adjacentPositions) {
+        require(currentPosition < TOTAL_POSITIONS, "Invalid position");
+
+        adjacentPositions = new uint256[](4); // Up, Down, Left, Right
+        adjacentPositions[0] = (currentPosition + 1) % TOTAL_POSITIONS;
+        adjacentPositions[1] =
+            (currentPosition + TOTAL_POSITIONS - 1) %
+            TOTAL_POSITIONS;
+        adjacentPositions[2] = (currentPosition + GRID_SIZE) % TOTAL_POSITIONS;
+        adjacentPositions[3] =
+            (currentPosition + TOTAL_POSITIONS - GRID_SIZE) %
+            TOTAL_POSITIONS;
     }
 
     /// @notice Checks if a move is valid
     /// @param from The starting position
     /// @param to The ending position
     /// @return bool indicating if the move is valid
-    function isValidMove(uint256 from, uint256 to) private pure returns (bool) {
-        int256 diff = int256(to) - int256(from);
-        return
-            (diff == 1 ||
-                diff == -1 ||
-                diff == int8(GRID_SIZE) ||
-                diff == -int8(GRID_SIZE)) && to < TOTAL_POSITIONS;
+    function isValidMove(uint256 from, uint256 to) public pure returns (bool) {
+        uint256[] memory validPositions = getValidAdjacentPositions(from);
+
+        // Check if 'to' is in the valid positions
+        for (uint256 i; i <= 3; i++) {
+            if (validPositions[i] == to) {
+                return true; // 'to' is a valid move
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        return false; // 'to' is not a valid move
     }
 
     /// @notice Gets a random adjacent position
@@ -137,13 +171,12 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     function getRandomAdjacentPosition(uint8 position) private returns (uint8) {
         uint256 randomValue = getRandomPosition();
         uint256 direction = (randomValue & 3); // Equivalent to % 4, but more gas-efficient
-        unchecked {
-            if (direction == 0) return (position + 1) % TOTAL_POSITIONS;
-            if (direction == 1)
-                return (position + TOTAL_POSITIONS - 1) % TOTAL_POSITIONS;
-            if (direction == 2) return (position + GRID_SIZE) % TOTAL_POSITIONS;
-            return (position + TOTAL_POSITIONS - GRID_SIZE) % TOTAL_POSITIONS;
-        }
+
+        if (direction == 0) return (position + 1) % TOTAL_POSITIONS;
+        if (direction == 1)
+            return (position + TOTAL_POSITIONS - 1) % TOTAL_POSITIONS;
+        if (direction == 2) return (position + GRID_SIZE) % TOTAL_POSITIONS;
+        return (position + TOTAL_POSITIONS - GRID_SIZE) % TOTAL_POSITIONS;
     }
 
     /// @notice Generates a random position
@@ -180,6 +213,7 @@ contract TreasureHunt is Ownable, ReentrancyGuard {
     /// @notice Allows the owner to withdraw all funds in case of emergency
     /// @dev Can only be called by the contract owner
     function emergencyWithdraw() external payable onlyOwner {
+        resetGame();
         uint256 balance = address(this).balance;
         payable(owner()).transfer(balance);
         emit EmergencyWithdrawal(owner(), balance);
